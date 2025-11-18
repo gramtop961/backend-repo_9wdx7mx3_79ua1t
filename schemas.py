@@ -1,48 +1,96 @@
 """
-Database Schemas
+Raksha Healthcare Platform Schemas
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model corresponds to one MongoDB collection (lowercased class name).
+Use these models for validating incoming requests and shaping responses.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field, EmailStr
+from datetime import datetime
 
-# Example schemas (replace with your own):
+# -------------------------------------------------
+# Core domain models
+# -------------------------------------------------
 
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    name: str
+    email: EmailStr
+    role: Literal["patient", "doctor", "admin"] = "patient"
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_active: bool = True
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Medicine(BaseModel):
+    name: str = Field(..., description="Medicine display name")
+    brand: Optional[str] = None
+    category: str = Field(..., description="Therapeutic category")
+    description: Optional[str] = None
+    price: float = Field(..., ge=0)
+    stock: int = Field(0, ge=0)
+    requires_rx: bool = Field(False, description="Whether prescription is required")
+    forms: List[str] = Field(default_factory=list, description="e.g., tablet, syrup")
+    strengths: List[str] = Field(default_factory=list)
+    image_url: Optional[str] = None
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+
+class Doctor(BaseModel):
+    name: str
+    specialty: str
+    experience_years: int = Field(ge=0, default=0)
+    rating: float = Field(ge=0, le=5, default=4.5)
+    fee: float = Field(ge=0, default=0)
+    languages: List[str] = Field(default_factory=list)
+    available: bool = True
+    image_url: Optional[str] = None
+
+
+class Prescription(BaseModel):
+    user_id: str
+    doctor_id: Optional[str] = None
+    notes: Optional[str] = None
+    file_url: Optional[str] = Field(None, description="If uploaded, a file URL")
+    status: Literal["pending", "approved", "rejected"] = "pending"
+
+
+class Consultation(BaseModel):
+    user_id: str
+    doctor_id: str
+    mode: Literal["video", "chat"] = "video"
+    datetime_iso: str = Field(..., description="ISO timestamp for appointment")
+    status: Literal["scheduled", "completed", "cancelled"] = "scheduled"
+
+
+class OrderItem(BaseModel):
+    medicine_id: str
+    name: str
+    price: float
+    quantity: int
+
+
+class Order(BaseModel):
+    user_id: str
+    items: List[OrderItem]
+    total_amount: float
+    address: str
+    payment_method: Literal["cod", "card", "upi"] = "cod"
+    status: Literal["placed", "packed", "shipped", "delivered", "cancelled"] = "placed"
+    prescription_id: Optional[str] = None
+
+
+# -------------------------------------------------
+# Response helpers
+# -------------------------------------------------
+
+class IdResponse(BaseModel):
+    id: str
+
+class MessageResponse(BaseModel):
+    message: str
+
+class Paginated(BaseModel):
+    total: int
+    items: list
+
+# Timestamps are auto-managed by database.create_document
